@@ -97,6 +97,23 @@ body.has-cursor .is-sealed {
   transform: translate(-50%, -50%) rotate(-45deg);
   transition: background-color .8s ease;
 }
+/* 点击涟漪：扩散圆环，情绪色描边 */
+.click-ripple {
+  position: fixed;
+  z-index: 99;
+  width: 160px;
+  height: 160px;
+  border: 1.5px solid rgb(var(--goo-color));
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(.05);
+  opacity: .8;
+  animation: ripple-expand .6s cubic-bezier(.2, .6, .3, 1) forwards;
+  transition: border-color .8s ease;
+}
+@keyframes ripple-expand {
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
 a-waves {
   position: fixed;
   inset: 0;
@@ -383,7 +400,7 @@ a-waves path {
 @media (prefers-reduced-motion: reduce) {
   .drip { animation: none; opacity: 0; }
   .hero-title::after { animation: none; }
-  a-waves, .cursor-dot { display: none; }
+  a-waves, .cursor-dot, .click-ripple { display: none; }
   html { scroll-behavior: auto; }
 }
 </style>
@@ -438,6 +455,18 @@ a-waves path {
   <a class="link-card" href="https://archive.heyuchick.com">
     <span class="link-name" data-i18n="link.archive.name">档案</span>
     <span class="link-meta" data-i18n="link.archive.meta">archive.heyuchick.com</span>
+    <span class="link-arrow">→</span>
+  </a>
+
+  <a class="link-card" href="https://connect.heyuchick.com">
+    <span class="link-name" data-i18n="link.proxy.name">代理</span>
+    <span class="link-meta" data-i18n="link.proxy.meta">connect.heyuchick.com</span>
+    <span class="link-arrow">→</span>
+  </a>
+
+  <a class="link-card" href="http://mc.heyuchick.com:8080">
+    <span class="link-name" data-i18n="link.world.name">世界</span>
+    <span class="link-meta" data-i18n="link.world.meta">mc.heyuchick.com:8080</span>
     <span class="link-arrow">→</span>
   </a>
 
@@ -561,6 +590,25 @@ class AWaves extends HTMLElement {
       mouse.set = true;
     }
   }
+  /* 点击脉冲：以 (cx, cy) 为圆心，向半径 radius 内的波浪点
+     施加径向向外的冲量——涟漪“砸”进波浪场 */
+  pulse(cx, cy, strength = 1.6, radius = 220) {
+    if (!this.bounding) return;
+    const x = cx - this.bounding.left;
+    const y = cy - this.bounding.top + window.scrollY;
+    this.lines.forEach(points => {
+      points.forEach(p => {
+        const dx = p.x - x;
+        const dy = p.y - y;
+        const d = Math.hypot(dx, dy);
+        if (d < radius && d > 0.001) {
+          const f = (1 - d / radius) * strength;
+          p.cursor.vx += (dx / d) * f;
+          p.cursor.vy += (dy / d) * f;
+        }
+      });
+    });
+  }
   setSize() {
     this.bounding = this.getBoundingClientRect();
     this.svg.style.width = `${this.bounding.width}px`;
@@ -680,6 +728,10 @@ const I18N = {
     'hero.desc': '深海海蛞蝓 × 白色犬兽人的共生体。看起来是无害黏人的少年小狗，实际上是能偷走别人能力的软体异种。',
     'link.archive.name': '档案',
     'link.archive.meta': 'archive.heyuchick.com',
+    'link.proxy.name': '代理',
+    'link.proxy.meta': 'connect.heyuchick.com',
+    'link.world.name': '世界',
+    'link.world.meta': 'mc.heyuchick.com:8080',
     'link.tools.name': '工具',
     'link.tools.meta': 'tools.heyuchick.com',
     'link.status.name': '状态',
@@ -705,6 +757,10 @@ const I18N = {
     'hero.desc': 'A symbiote of a deep-sea sea slug and a white dog beastman. He looks like a harmless, clingy pup — in truth, a soft-bodied entity that steals abilities through touch.',
     'link.archive.name': 'Archive',
     'link.archive.meta': 'archive.heyuchick.com',
+    'link.proxy.name': 'Proxy',
+    'link.proxy.meta': 'connect.heyuchick.com',
+    'link.world.name': 'World',
+    'link.world.meta': 'mc.heyuchick.com:8080',
     'link.tools.name': 'Tools',
     'link.tools.meta': 'tools.heyuchick.com',
     'link.status.name': 'Status',
@@ -730,6 +786,10 @@ const I18N = {
     'hero.desc': '深海のナメクジ × 白い犬の獣人の共生体。無害で人懐っこい少年に見えるが、実は触れた相手の能力を盗む軟体共生体。',
     'link.archive.name': 'アーカイブ',
     'link.archive.meta': 'archive.heyuchick.com',
+    'link.proxy.name': 'プロキシ',
+    'link.proxy.meta': 'connect.heyuchick.com',
+    'link.world.name': '世界',
+    'link.world.meta': 'mc.heyuchick.com:8080',
     'link.tools.name': 'ツール',
     'link.tools.meta': 'tools.heyuchick.com',
     'link.status.name': 'ステータス',
@@ -795,6 +855,20 @@ function addEnergy(n) {
   energy = Math.min(100, energy + n);
 }
 
+/* 点击涟漪：视觉圆环 + 注入波浪场的脉冲（同一滩水） */
+function spawnRipple(x, y) {
+  const el = document.createElement('div');
+  el.className = 'click-ripple';
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+  const waves = document.querySelector('a-waves');
+  if (waves && typeof waves.pulse === 'function') {
+    waves.pulse(x, y);
+  }
+}
+
 if (!reducedMotion) {
   let lastMove = 0;
   window.addEventListener('pointermove', () => {
@@ -804,7 +878,10 @@ if (!reducedMotion) {
       addEnergy(1.5);
     }
   });
-  window.addEventListener('pointerdown', () => addEnergy(8));
+  window.addEventListener('pointerdown', (e) => {
+    addEnergy(8);
+    spawnRipple(e.clientX, e.clientY);
+  });
   document.querySelectorAll('.link-card:not(.is-sealed), .social-link, .lang-btn, .brand')
     .forEach(el => el.addEventListener('mouseenter', () => addEnergy(6)));
   setInterval(() => {
