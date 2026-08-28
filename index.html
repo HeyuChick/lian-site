@@ -97,22 +97,56 @@ body.has-cursor .is-sealed {
   transform: translate(-50%, -50%) rotate(-45deg);
   transition: background-color .8s ease;
 }
-/* 点击涟漪：扩散圆环，情绪色描边 */
-.click-ripple {
+/* 点击黏液涟漪：双圈扩散 + goo 飞散液滴，颜色接入情绪显色系统（--goo-color） */
+.ripple-fx {
   position: fixed;
   z-index: 99;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.ripple-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 160px;
   height: 160px;
   border: 1.5px solid rgb(var(--goo-color));
   border-radius: 50%;
-  pointer-events: none;
   transform: translate(-50%, -50%) scale(.05);
   opacity: .8;
   animation: ripple-expand .6s cubic-bezier(.2, .6, .3, 1) forwards;
-  transition: border-color .8s ease;
+}
+.ripple-ring-2 {
+  width: 110px;
+  height: 110px;
+  opacity: .45;
+  animation-delay: .08s;
 }
 @keyframes ripple-expand {
   to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+.ripple-goo {
+  position: absolute;
+  left: -60px;
+  top: -60px;
+  width: 120px;
+  height: 120px;
+  filter: url(#goo);
+}
+.ripple-drop {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: rgb(var(--goo-color));
+  animation: drop-fly .55s cubic-bezier(.15, .6, .3, 1) forwards;
+}
+@keyframes drop-fly {
+  to { transform: translate(var(--dx), var(--dy)) scale(.3); opacity: 0; }
 }
 a-waves {
   position: fixed;
@@ -400,7 +434,7 @@ a-waves path {
 @media (prefers-reduced-motion: reduce) {
   .drip { animation: none; opacity: 0; }
   .hero-title::after { animation: none; }
-  a-waves, .cursor-dot, .click-ripple { display: none; }
+  a-waves, .cursor-dot, .ripple-fx { display: none; }
   html { scroll-behavior: auto; }
 }
 </style>
@@ -464,9 +498,9 @@ a-waves path {
     <span class="link-arrow">→</span>
   </a>
 
-  <a class="link-card" href="http://mc.heyuchick.com:8080">
+  <a class="link-card" href="https://map.heyuchick.com">
     <span class="link-name" data-i18n="link.world.name">世界</span>
-    <span class="link-meta" data-i18n="link.world.meta">mc.heyuchick.com:8080</span>
+    <span class="link-meta" data-i18n="link.world.meta">map.heyuchick.com</span>
     <span class="link-arrow">→</span>
   </a>
 
@@ -731,7 +765,7 @@ const I18N = {
     'link.proxy.name': '代理',
     'link.proxy.meta': 'connect.heyuchick.com',
     'link.world.name': '世界',
-    'link.world.meta': 'mc.heyuchick.com:8080',
+    'link.world.meta': 'map.heyuchick.com',
     'link.tools.name': '工具',
     'link.tools.meta': 'tools.heyuchick.com',
     'link.status.name': '状态',
@@ -760,7 +794,7 @@ const I18N = {
     'link.proxy.name': 'Proxy',
     'link.proxy.meta': 'connect.heyuchick.com',
     'link.world.name': 'World',
-    'link.world.meta': 'mc.heyuchick.com:8080',
+    'link.world.meta': 'map.heyuchick.com',
     'link.tools.name': 'Tools',
     'link.tools.meta': 'tools.heyuchick.com',
     'link.status.name': 'Status',
@@ -789,7 +823,7 @@ const I18N = {
     'link.proxy.name': 'プロキシ',
     'link.proxy.meta': 'connect.heyuchick.com',
     'link.world.name': '世界',
-    'link.world.meta': 'mc.heyuchick.com:8080',
+    'link.world.meta': 'map.heyuchick.com',
     'link.tools.name': 'ツール',
     'link.tools.meta': 'tools.heyuchick.com',
     'link.status.name': 'ステータス',
@@ -855,14 +889,41 @@ function addEnergy(n) {
   energy = Math.min(100, energy + n);
 }
 
-/* 点击涟漪：视觉圆环 + 注入波浪场的脉冲（同一滩水） */
+/* 点击黏液涟漪：双圈扩散 + goo 液滴 + 注入波浪场的脉冲
+   颜色取 --goo-color，接入情绪显色系统（越点击越兴奋，涟漪颜色越艳） */
 function spawnRipple(x, y) {
-  const el = document.createElement('div');
-  el.className = 'click-ripple';
-  el.style.left = `${x}px`;
-  el.style.top = `${y}px`;
-  document.body.appendChild(el);
-  el.addEventListener('animationend', () => el.remove());
+  const fx = document.createElement('div');
+  fx.className = 'ripple-fx';
+  fx.style.left = `${x}px`;
+  fx.style.top = `${y}px`;
+
+  const ring1 = document.createElement('div');
+  ring1.className = 'ripple-ring';
+  const ring2 = document.createElement('div');
+  ring2.className = 'ripple-ring ripple-ring-2';
+  fx.appendChild(ring1);
+  fx.appendChild(ring2);
+
+  const goo = document.createElement('div');
+  goo.className = 'ripple-goo';
+  for (let i = 0; i < 5; i++) {
+    const drop = document.createElement('div');
+    drop.className = 'ripple-drop';
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 24 + Math.random() * 28;
+    drop.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+    drop.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
+    drop.style.animationDelay = `${Math.random() * 0.06}s`;
+    const size = 6 + Math.random() * 6;
+    drop.style.width = `${size}px`;
+    drop.style.height = `${size}px`;
+    goo.appendChild(drop);
+  }
+  fx.appendChild(goo);
+
+  document.body.appendChild(fx);
+  setTimeout(() => fx.remove(), 900);
+
   const waves = document.querySelector('a-waves');
   if (waves && typeof waves.pulse === 'function') {
     waves.pulse(x, y);
